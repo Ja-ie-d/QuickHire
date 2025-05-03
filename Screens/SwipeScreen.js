@@ -1,39 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, Text, SafeAreaView, Dimensions } from 'react-native';
 import FreelancerCard from '../components/FreelancerCard';
 import MatchModal from '../components/MatchModal';
 import { useMatch } from '../context/MatchContext';
+import { useChat } from '../context/ChatContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function SwipeScreen() {
   const { availableFreelancers, addMatch } = useMatch();
-
-  const [availableProfiles, setAvailableProfiles] = useState([]);
-  const [currentProfile, setCurrentProfile] = useState(null);
+  const { addMessage } = useChat();
+  const [currentProfile, setCurrentProfile] = useState(availableFreelancers[0]);
   const [showMatch, setShowMatch] = useState(false);
   const [lastMatchedProfile, setLastMatchedProfile] = useState(null);
 
-  useEffect(() => {
-    if (availableFreelancers && availableFreelancers.length > 0) {
-      setAvailableProfiles([...availableFreelancers]);
-      setCurrentProfile(availableFreelancers[0]);
-    }
-  }, [availableFreelancers]);
-
-  const handleSwipe = (direction) => {
-    if (direction === 'right' && currentProfile) {
-      addMatch(currentProfile);
-      setLastMatchedProfile(currentProfile);
+  const handleSwipe = async (direction, freelancer) => {
+    if (direction === 'right') {
+      // Add to matches
+      await addMatch(freelancer);
+      setLastMatchedProfile(freelancer);
       setShowMatch(true);
+      
+      // Create initial chat message
+      await addMessage(freelancer.id, {
+        text: `You matched with ${freelancer.name}! Start your conversation.`,
+        sender: 'system',
+        timestamp: new Date().toISOString()
+      });
     }
 
-    const updatedProfiles = availableProfiles.filter(
-      profile => profile.id !== currentProfile?.id
-    );
-
-    setAvailableProfiles(updatedProfiles);
-    setCurrentProfile(updatedProfiles.length > 0 ? updatedProfiles[0] : null);
+    // Move to next profile
+    const currentIndex = availableFreelancers.indexOf(currentProfile);
+    if (currentIndex < availableFreelancers.length - 1) {
+      setCurrentProfile(availableFreelancers[currentIndex + 1]);
+    } else {
+      setCurrentProfile(null);
+    }
   };
 
   const closeMatchModal = () => {

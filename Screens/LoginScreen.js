@@ -11,9 +11,11 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { supabase } from '../lib/supabase'; // Import the supabase client
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
-export default function LoginScreen({ navigation, onLogin }) {
+export default function LoginScreen({ navigation }) {
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -27,24 +29,11 @@ export default function LoginScreen({ navigation, onLogin }) {
     setIsLoading(true);
     
     try {
-      // Use Supabase authentication
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      
-      if (error) {
-        Alert.alert('Login Failed', 'Invalid email or password.');
-        console.error('Login error:', error.message);
-        return;
-      }
-      
-      // Call the onLogin function from App.js to update the authentication state
-      onLogin(email, password);
-      
+      await signIn(email, password);
+      navigation.navigate('Main');
     } catch (error) {
       console.error('Unexpected error during login:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert('Error', 'Invalid email or password. Please try again.');
     } finally {
       setIsLoading(false);
     }

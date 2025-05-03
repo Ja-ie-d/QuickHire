@@ -18,15 +18,30 @@ export const MatchProvider = ({ children }) => {
   // Fetch all available freelancers for swiping
   const fetchAvailableFreelancers = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('No authenticated user found');
+        return;
+      }
+
+      // Get existing matches to exclude them from available freelancers
+      const { data: matchData } = await supabase
+        .from('matches')
+        .select('freelancer_id')
+        .eq('user_id', user.id);
+
+      const matchedIds = matchData ? matchData.map(m => m.freelancer_id) : [];
+
       const { data, error } = await supabase
         .from('freelancers')
         .select('*')
-        .eq('available_for_work', true);
+        .eq('available_for_work', true)
+        .not('id', 'in', `(${matchedIds.join(',')})`);
 
       if (error) {
         console.error('Error fetching available freelancers:', error.message);
       } else {
-        setAvailableFreelancers(data);
+        setAvailableFreelancers(data || []);
       }
     } catch (err) {
       console.error('Unexpected error fetching freelancers:', err.message);
@@ -52,8 +67,14 @@ export const MatchProvider = ({ children }) => {
       if (error) {
         console.error('Error fetching matches:', error);
       } else if (data) {
-        const formattedMatches = data.map(match => match.freelancer);
-        setMatches(formattedMatches);
+        // Ensure unique matches by freelancer ID
+        const uniqueMatches = data.reduce((acc, match) => {
+          if (!acc.some(m => m.id === match.freelancer.id)) {
+            acc.push(match.freelancer);
+          }
+          return acc;
+        }, []);
+        setMatches(uniqueMatches);
       }
     } catch (error) {
       console.error('Error in fetchMatches:', error);
@@ -70,8 +91,6 @@ export const MatchProvider = ({ children }) => {
       return;
     }
 
-    setMatches(prevMatches => [...prevMatches, freelancer]);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -84,23 +103,34 @@ export const MatchProvider = ({ children }) => {
         .insert({
           user_id: user.id,
           freelancer_id: freelancer.id,
-          
+          created_at: new Date().toISOString()
         });
 
       if (error) {
         console.error('Error saving match:', error);
-        setMatches(prevMatches => prevMatches.filter(m => m.id !== freelancer.id));
+        return;
       }
+
+      // Add to local state only after successful database insert
+      setMatches(prevMatches => {
+        if (prevMatches.some(m => m.id === freelancer.id)) {
+          return prevMatches;
+        }
+        return [...prevMatches, freelancer];
+      });
+
+      // Remove from available freelancers
+      setAvailableFreelancers(prev => 
+        prev.filter(f => f.id !== freelancer.id)
+      );
+
     } catch (error) {
       console.error('Error in addMatch:', error);
-      setMatches(prevMatches => prevMatches.filter(m => m.id !== freelancer.id));
     }
   };
 
   // Remove a match
   const removeMatch = async (freelancerId) => {
-    setMatches(prev => prev.filter(m => m.id !== freelancerId));
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -113,6 +143,21 @@ export const MatchProvider = ({ children }) => {
 
       if (error) {
         console.error('Error removing match:', error);
+        return;
+      }
+
+      // Update local state only after successful database delete
+      setMatches(prev => prev.filter(m => m.id !== freelancerId));
+      
+      // Fetch the freelancer details to add back to available freelancers
+      const { data: freelancer } = await supabase
+        .from('freelancers')
+        .select('*')
+        .eq('id', freelancerId)
+        .single();
+
+      if (freelancer) {
+        setAvailableFreelancers(prev => [...prev, freelancer]);
       }
     } catch (error) {
       console.error('Error in removeMatch:', error);

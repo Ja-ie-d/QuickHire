@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMatch } from '../context/MatchContext';
-import { useRating } from '../App';
+import { useRating } from '../context/RatingContext';
 
 const RatingScreen = () => {
     const { matches } = useMatch();

@@ -21,12 +21,14 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system'; 
 import { supabase } from '../lib/supabase';
 import { Buffer } from 'buffer';
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 
-export default function Profile({ signOut }) {
-  const { handleSignOut } = useAuth();
+export default function Profile() {
+  const { signOut } = useAuth();
+  const navigation = useNavigation();
   const { width, height } = useWindowDimensions(); // Dynamic dimensions that update on rotation
   const isSmallDevice = width < 375;
   const isLandscape = width > height;
@@ -452,6 +454,19 @@ export default function Profile({ signOut }) {
     }
 
     setLoading(false);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+    } catch (error) {
+      console.error('Error signing out:', error);
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
   };
 
   // Availability Modal
