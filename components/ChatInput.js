@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const ChatInput = ({ message, setMessage, onSend, onAttach, isSending }) => {
+const ChatInput = ({ message, setMessage, onSend, isSending }) => {
   const handleSend = () => {
     if (!isSending) {
       onSend();
@@ -18,9 +18,6 @@ const ChatInput = ({ message, setMessage, onSend, onAttach, isSending }) => {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.attachButton} onPress={onAttach}>
-        <Ionicons name="attach" size={24} color="#007AFF" />
-      </TouchableOpacity>
       <TextInput
         style={styles.input}
         value={message}
@@ -63,9 +60,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     maxHeight: 100,
     fontSize: 16,
-  },
-  attachButton: {
-    padding: 8,
   },
   sendButton: {
     backgroundColor: '#007AFF',

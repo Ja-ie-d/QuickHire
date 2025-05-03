@@ -2,26 +2,18 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const ChatHeader = ({ user, onBack, onCall, onVideo }) => {
+const ChatHeader = ({ user, onBack }) => {
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} style={styles.backButton}>
         <Ionicons name="arrow-back" size={24} color="#000" />
       </TouchableOpacity>
       <View style={styles.userInfo}>
-        <Image source={{ uri: user?.avatar }} style={styles.avatar} />
+        <Image source={{ uri: user?.image_url }} style={styles.avatar} />
         <View style={styles.userDetails}>
           <Text style={styles.name}>{user?.name}</Text>
           <Text style={styles.status}>{user?.status || 'Online'}</Text>
         </View>
-      </View>
-      <View style={styles.actions}>
-        <TouchableOpacity onPress={onCall} style={styles.actionButton}>
-          <Ionicons name="call" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={onVideo} style={styles.actionButton}>
-          <Ionicons name="videocam" size={24} color="#007AFF" />
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -60,12 +52,6 @@ const styles = StyleSheet.create({
   status: {
     fontSize: 12,
     color: '#666',
-  },
-  actions: {
-    flexDirection: 'row',
-  },
-  actionButton: {
-    marginLeft: 16,
   },
 });
 

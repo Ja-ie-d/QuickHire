@@ -26,6 +26,12 @@ const ChatScreen = ({ navigation, route }) => {
   const flatListRef = useRef(null);
 
   useEffect(() => {
+    if (route.params?.freelancer) {
+      setSelectedFreelancer(route.params.freelancer);
+    }
+  }, [route.params]);
+
+  useEffect(() => {
     if (selectedFreelancer && chats[selectedFreelancer.id]) {
       flatListRef.current?.scrollToEnd({ animated: true });
     }
@@ -43,21 +49,6 @@ const ChatScreen = ({ navigation, route }) => {
     } finally {
       setIsSending(false);
     }
-  };
-
-  const handleAttach = () => {
-    // Implement file attachment functionality
-    console.log('Attach file');
-  };
-
-  const handleCall = () => {
-    // Implement call functionality
-    console.log('Start call');
-  };
-
-  const handleVideo = () => {
-    // Implement video call functionality
-    console.log('Start video call');
   };
 
   const renderMessage = ({ item, index }) => (
@@ -83,8 +74,6 @@ const ChatScreen = ({ navigation, route }) => {
       <ChatHeader
         user={selectedFreelancer}
         onBack={() => navigation.goBack()}
-        onCall={handleCall}
-        onVideo={handleVideo}
       />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -113,7 +102,6 @@ const ChatScreen = ({ navigation, route }) => {
               message={message}
               setMessage={setMessage}
               onSend={handleSendMessage}
-              onAttach={handleAttach}
               isSending={isSending}
             />
           </View>

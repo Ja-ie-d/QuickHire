@@ -208,8 +208,7 @@ const Match = ({ onMatchCreated }) => {
     
     // Navigate to chat screen with the selected freelancer
     navigation.navigate('Chat', { 
-      freelancers: matches, 
-      currentFreelancer: selectedFreelancer 
+      freelancer: selectedFreelancer 
     });
   };
 
