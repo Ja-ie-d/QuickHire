@@ -10,7 +10,9 @@ import {
   StyleSheet,
   Dimensions,
   StatusBar,
-  SafeAreaView
+  SafeAreaView,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { 
@@ -20,7 +22,8 @@ import Animated, {
   withTiming, 
   runOnJS,
   interpolate,
-  Extrapolation
+  Extrapolation,
+  Easing
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import Star from './Star';
@@ -46,12 +49,22 @@ const Match = ({ onMatchCreated }) => {
   const [direction, setDirection] = useState(null);
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isReloading, setIsReloading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const x = useSharedValue(0);
   const y = useSharedValue(0);
   const rotate = useSharedValue(0);
   const cardOpacity = useSharedValue(1);
   const scale = useSharedValue(1);
+  const entranceOpacity = useSharedValue(0);
+  const entranceTranslateY = useSharedValue(40);
+
+  // Animate card entrance
+  useEffect(() => {
+    entranceOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.exp) });
+    entranceTranslateY.value = withTiming(0, { duration: 400, easing: Easing.out(Easing.exp) });
+  }, [currentIndex]);
 
   // Check authentication status when component mounts
   useEffect(() => {
@@ -102,7 +115,9 @@ const Match = ({ onMatchCreated }) => {
         // If there's an error, use sample data
         setFreelancers(sampleFreelancers);
       } else if (data && data.length > 0) {
-        setFreelancers(data);
+        // Randomly shuffle the data to provide a fresh experience on reload
+        const shuffledData = [...data].sort(() => Math.random() - 0.5);
+        setFreelancers(shuffledData);
       } else {
         // Fallback to sample data if no freelancers in database
         setFreelancers(sampleFreelancers);
@@ -112,7 +127,17 @@ const Match = ({ onMatchCreated }) => {
       setFreelancers(sampleFreelancers);
     } finally {
       setIsLoading(false);
+      setIsReloading(false);
     }
+  };
+
+  const handleReloadFreelancers = () => {
+    setIsReloading(true);
+    setCurrentIndex(0);
+    // Small delay to allow for animation
+    setTimeout(() => {
+      fetchFreelancers();
+    }, 300);
   };
 
   // Sample data as fallback
@@ -241,23 +266,97 @@ const Match = ({ onMatchCreated }) => {
 
   const cardStyle = useAnimatedStyle(() => {
     const rotateValue = `${rotate.value}deg`;
-    
+    // Animate scale and shadow as card is dragged
+    const dragDistance = Math.abs(x.value);
+    const scaleValue = interpolate(dragDistance, [0, SWIPE_THRESHOLD], [1, 0.96], Extrapolation.CLAMP);
+    const shadowOpacity = interpolate(dragDistance, [0, SWIPE_THRESHOLD], [0.12, 0.25], Extrapolation.CLAMP);
+    // Animate colored shadow/glow based on swipe direction
+    let shadowColor = '#4C63B6';
+    if (x.value > 0) shadowColor = '#4CD964'; // right swipe = green glow
+    if (x.value < 0) shadowColor = '#FF6B6B'; // left swipe = red glow
     return {
       transform: [
         { translateX: x.value },
-        { translateY: y.value },
+        { translateY: y.value + entranceTranslateY.value },
         { rotate: rotateValue },
-        { scale: scale.value }
+        { scale: scale.value * scaleValue },
       ],
-      opacity: cardOpacity.value,
+      opacity: cardOpacity.value * entranceOpacity.value,
+      shadowColor,
+      shadowOpacity,
     };
   });
+
+  // Animated swipe instruction
+  const instructionOpacity = useSharedValue(0);
+  useEffect(() => {
+    instructionOpacity.value = withTiming(1, { duration: 600 });
+    return () => { instructionOpacity.value = 0; };
+  }, [currentIndex]);
+  const instructionStyle = useAnimatedStyle(() => ({
+    opacity: instructionOpacity.value,
+    transform: [{ translateY: interpolate(instructionOpacity.value, [0, 1], [20, 0]) }],
+  }));
+
+  const uploadImage = async (uri) => {
+    setUploading(true);
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+
+      // Fetch the file as a blob and set the type explicitly
+      const response = await fetch(uri);
+      const arrayBuffer = await response.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: 'image/jpeg' }); // or 'image/png' if PNG
+
+      const filePath = `${user.id}/profile.jpg`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, blob, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: 'image/jpeg', // Make sure this matches the Blob type
+        });
+
+      if (uploadError) {
+        console.log('Upload error:', uploadError.message);
+        Alert.alert('Upload Failed', uploadError.message);
+        return;
+      }
+
+      const { data: publicUrlData, error: publicUrlError } = await supabase
+        .storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+
+      if (publicUrlError) {
+        console.log('Error getting public URL:', publicUrlError.message);
+        return;
+      }
+
+      if (publicUrlData?.publicUrl) {
+        const imageUrl = publicUrlData.publicUrl;
+        setProfile(prev => ({ ...prev, image_url: imageUrl + '?cache=' + Date.now() }));
+        await supabase
+          .from('profiles')
+          .update({ image_url: imageUrl })
+          .eq('id', user.id);
+      }
+    } catch (error) {
+      console.log('Upload image error:', error.message);
+      Alert.alert('Error', 'Failed to upload the image.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Render appropriate content based on loading state and available freelancers
   const renderContent = () => {
     if (isLoading) {
       return (
         <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4C63B6" />
           <Text style={styles.loadingText}>Loading freelancers...</Text>
         </View>
       );
@@ -267,6 +366,12 @@ const Match = ({ onMatchCreated }) => {
       return (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No freelancers available at the moment</Text>
+          <TouchableOpacity 
+            style={styles.reloadButton} 
+            onPress={handleReloadFreelancers}
+          >
+            <Text style={styles.reloadButtonText}>Try Again</Text>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -275,11 +380,30 @@ const Match = ({ onMatchCreated }) => {
       return (
         <View style={styles.endContainer}>
           <Text style={styles.endText}>You've viewed all available profiles</Text>
+          
+          <TouchableOpacity 
+            style={styles.reloadButton} 
+            onPress={handleReloadFreelancers}
+            disabled={isReloading}
+          >
+            {isReloading ? (
+              <View style={styles.reloadButtonContent}>
+                <ActivityIndicator size="small" color="white" />
+                <Text style={[styles.reloadButtonText, {marginLeft: 10}]}>Reloading...</Text>
+              </View>
+            ) : (
+              <View style={styles.reloadButtonContent}>
+                <FontAwesome name="refresh" size={20} color="white" style={{marginRight: 10}} />
+                <Text style={styles.reloadButtonText}>Reload Freelancers</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          
           <TouchableOpacity 
             style={styles.resetButton} 
             onPress={() => setCurrentIndex(0)}
           >
-            <Text style={styles.resetButtonText}>Start Over</Text>
+            <Text style={styles.resetButtonText}>Start Over (Same Profiles)</Text>
           </TouchableOpacity>
         </View>
       );
@@ -289,6 +413,9 @@ const Match = ({ onMatchCreated }) => {
     
     return (
       <GestureHandlerRootView style={styles.gestureContainer}>
+        <Animated.View style={[styles.swipeInstructionContainer, instructionStyle]}>
+          <Text style={styles.swipeInstructionText}>Swipe left to pass, right to match</Text>
+        </Animated.View>
         <GestureDetector gesture={gesture}>
           <Animated.View style={[styles.card, cardStyle]}>
             {/* Main Card Content */}
@@ -302,6 +429,7 @@ const Match = ({ onMatchCreated }) => {
                   source={{ uri: currentFreelancer.image_url }}
                   style={styles.profileImage}
                   onError={() => setImageError(true)}
+                  key={currentFreelancer.image_url}
                 />
               )}
               
@@ -377,7 +505,8 @@ const Match = ({ onMatchCreated }) => {
     );
   };
   
-  // Action buttons outside the swipeable card
+  // Action buttons are now commented out / removed
+  // The renderActionButtons function is kept but not used
   const renderActionButtons = () => {
     if (isLoading || freelancers.length === 0 || currentIndex >= freelancers.length) {
       return null;
@@ -427,6 +556,7 @@ const Match = ({ onMatchCreated }) => {
                 <Image
                   source={{ uri: selectedFreelancer.image_url }}
                   style={styles.matchImage}
+                  key={selectedFreelancer.image_url}
                 />
               ) : (
                 <View style={styles.fallbackMatchImage}>
@@ -458,9 +588,9 @@ const Match = ({ onMatchCreated }) => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor="#F5F7FA" barStyle="dark-content" />
       <View style={styles.container}>
-        <Text style={styles.headerTitle}>Find Freelancers</Text>
+        <Text style={styles.headerTitle}></Text>
         {renderContent()}
-        {renderActionButtons()}
+        {/* Action buttons removed from here */}
         {renderMatchModal()}
       </View>
     </SafeAreaView>
@@ -493,26 +623,35 @@ const styles = StyleSheet.create({
   },
   card: {
     width: SCREEN_WIDTH * 0.95,
-    height: SCREEN_HEIGHT * 0.65, // Reduced card height from 0.7 to 0.65
+    height: SCREEN_HEIGHT * 0.75,
     backgroundColor: 'white',
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    elevation: 10,
+    shadowColor: '#4C63B6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F0F1F6',
   },
   imageContainer: {
-    height: '40%', // Reduced image height from 45% to 40%
+    height: '40%',
     width: '100%',
     backgroundColor: '#f0f0f0',
     position: 'relative',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: 'hidden',
   },
   profileImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    borderWidth: 2,
+    borderColor: '#E0E7FF',
   },
   imageDarkOverlay: {
     position: 'absolute',
@@ -520,27 +659,33 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    justifyContent: 'flex-end', // Changed from space-between to flex-end to push content to bottom
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    justifyContent: 'flex-end',
   },
   imageBottomInfo: {
     padding: 20,
   },
   nameOnImage: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 'bold',
     color: 'white',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 5,
+    textShadowRadius: 6,
+    marginBottom: 2,
   },
   ratingOnImage: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 5,
+    marginTop: 7,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
   },
   ratingTextOnImage: {
-    marginLeft: 5,
+    marginLeft: 6,
     fontSize: 16,
     color: 'white',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
@@ -571,29 +716,33 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10, // Reduced from 15 to 10
-    paddingVertical: 10,
+    marginBottom: 14,
+    paddingVertical: 12,
     backgroundColor: '#F8FAFC',
-    borderRadius: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    borderRadius: 18,
+    shadowColor: '#4C63B6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+    paddingHorizontal: 8,
   },
   stat: {
     alignItems: 'center',
     flex: 1,
+    flexDirection: 'column',
+    gap: 2,
   },
   statValue: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#2D3A4B',
   },
   statLabel: {
     fontSize: 13,
-    color: '#666',
-    marginTop: 3,
+    color: '#7B8794',
+    marginTop: 2,
+    fontWeight: '500',
   },
   divider: {
     height: 1,
@@ -602,42 +751,47 @@ const styles = StyleSheet.create({
   },
   detailsScroll: {
     flex: 1,
+    paddingHorizontal: 2,
+    paddingBottom: 10,
   },
   detailSection: {
-    marginBottom: 15, // Reduced from 20 to 15
+    marginBottom: 18,
   },
   sectionTitle: {
-    fontSize: 16, // Reduced from 18 to 16
+    fontSize: 17,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 6, // Reduced from 8 to 6
+    color: '#4C63B6',
+    marginBottom: 7,
+    letterSpacing: 0.2,
   },
   detailText: {
-    fontSize: 14, // Reduced from 15 to 14
+    fontSize: 14,
     color: '#555',
-    lineHeight: 20, // Reduced from 22 to 20
+    lineHeight: 21,
+    marginBottom: 2,
   },
   skillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 5,
+    marginTop: 7,
+    gap: 2,
   },
   skillChip: {
     backgroundColor: '#E0E7FF',
-    borderRadius: 15,
-    paddingHorizontal: 12,
+    borderRadius: 20,
+    paddingHorizontal: 14,
     paddingVertical: 7,
     margin: 3,
     shadowColor: '#4C63B6',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
     elevation: 1,
   },
   skillText: {
     fontSize: 13,
     color: '#4C63B6',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -675,6 +829,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 18,
     color: '#666',
+    marginTop: 15,
   },
   emptyContainer: {
     flex: 1,
@@ -686,6 +841,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
     textAlign: 'center',
+    marginBottom: 20,
   },
   endContainer: {
     flex: 1,
@@ -700,21 +856,45 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 25,
   },
-  resetButton: {
-    backgroundColor: '#4C63B6',
+  reloadButton: {
+    backgroundColor: 'linear-gradient(90deg, #4C63B6 0%, #6B8DD6 100%)',
     paddingHorizontal: 25,
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 14,
     shadowColor: '#4C63B6',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowOpacity: 0.18,
+    shadowRadius: 7,
     elevation: 3,
+    marginBottom: 15,
+    minWidth: 200,
+    alignItems: 'center',
   },
-  resetButtonText: {
+  reloadButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reloadButtonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 17,
+    letterSpacing: 0.2,
+  },
+  resetButton: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 25,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#cccccc',
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  resetButtonText: {
+    color: '#666',
+    fontWeight: '500',
+    fontSize: 15,
   },
   modalOverlay: {
     flex: 1,
@@ -785,14 +965,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 25,
     lineHeight: 22,
+    marginBottom: 25,
   },
   chatButton: {
     backgroundColor: '#4CD964',
-    width: '100%',
+    paddingHorizontal: 25,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 10,
+    width: '100%',
     alignItems: 'center',
     shadowColor: '#4CD964',
     shadowOffset: { width: 0, height: 3 },
@@ -807,19 +988,31 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   continueButton: {
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#CCC',
+    paddingVertical: 12,
+    width: '100%',
+    alignItems: 'center',
   },
   continueButtonText: {
     color: '#666',
     fontWeight: '500',
     fontSize: 16,
   },
+  swipeInstructionContainer: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  swipeInstructionText: {
+    color: '#888',
+    fontSize: 14,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+  }
 });
 
 export default Match;

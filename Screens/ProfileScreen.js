@@ -18,12 +18,13 @@ import {
   ActivityIndicator
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system'; 
+import * as FileSystem from 'expo-file-system';
 import { supabase } from '../lib/supabase';
-import { Buffer } from 'buffer';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 
 export default function Profile() {
@@ -63,6 +64,14 @@ export default function Profile() {
     year: new Date().getFullYear(),
     issuer: ''
   });
+
+  // Profile image press animation
+  const scale = useSharedValue(1);
+  const animatedImageStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const handleImagePressIn = () => { scale.value = withSpring(1.08); };
+  const handleImagePressOut = () => { scale.value = withSpring(1); };
 
   useEffect(() => {
     fetchProfile();
@@ -106,19 +115,17 @@ export default function Profile() {
       } else if (data) {
         let parsedData = { ...data };
 
-        
-
         const { data: ratingData, error: ratingError } = await supabase
-    .from('ratings')
-    .select('rating')
-    .eq('freelancer_id', user.id)
-    .maybeSingle();
+          .from('ratings')
+          .select('rating')
+          .eq('freelancer_id', user.id)
+          .maybeSingle();
 
-  if (ratingError) {
-    console.log('Error fetching rating:', ratingError.message);
-  } else if (ratingData) {
-    parsedData.rating = ratingData.rating; // Attach to profile
-  }
+        if (ratingError) {
+          console.log('Error fetching rating:', ratingError.message);
+        } else if (ratingData) {
+          parsedData.rating = ratingData.rating; // Attach to profile
+        }
         
         // Parse skills
         if (typeof parsedData.skills === 'string') {
@@ -161,6 +168,11 @@ export default function Profile() {
           parsedData.certificates = [];
         }
         
+        // Add cache busting parameter to image_url if it exists
+        if (parsedData.image_url) {
+          parsedData.image_url = `${parsedData.image_url}?cache=${new Date().getTime()}`;
+        }
+        
         setProfile(parsedData);
       }
     } catch (error) {
@@ -173,7 +185,7 @@ export default function Profile() {
   const handleImagePick = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 1,
@@ -192,71 +204,46 @@ export default function Profile() {
   const uploadImage = async (uri) => {
     setUploading(true);
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        console.log('User error while uploading:', userError?.message);
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.log('Session error:', sessionError?.message);
         return;
       }
-  
-      console.log('Uploading to profiles bucket...');
-  
-      // Read the file
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-  
-      const binary = Buffer.from(base64, 'base64');
-  
-      // Here define the correct filePath
+      const user = session.user;
       const filePath = `${user.id}/profile.jpg`;
-  
-      // Step 1: Upload the image
-      const { data, error: uploadError } = await supabase.storage
-        .from('profiles')
-        .upload(filePath, binary, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: 'image/jpeg',
-        });
-  
-      if (uploadError) {
-        console.log('Upload error:', uploadError.message);
-        Alert.alert('Upload Failed', uploadError.message);
+      // Supabase Storage REST endpoint
+      const uploadUrl = `https://jbgroqozrlptdfkilpuk.supabase.co/storage/v1/object/profiles/${filePath}`;
+      const response = await FileSystem.uploadAsync(uploadUrl, uri, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'x-upsert': 'true',
+        },
+      });
+      if (response.status !== 200 && response.status !== 201) {
+        console.log('Upload failed:', response.body);
+        Alert.alert('Upload Failed', response.body);
         return;
       }
-  
-      // Step 2: Get the public URL
+      // Get the public URL
       const { data: publicUrlData, error: publicUrlError } = await supabase
         .storage
         .from('profiles')
         .getPublicUrl(filePath);
-  
       if (publicUrlError) {
         console.log('Error getting public URL:', publicUrlError.message);
         return;
       }
-  
       if (publicUrlData?.publicUrl) {
         const imageUrl = publicUrlData.publicUrl;
-        console.log('Image URL set to:', imageUrl);
-  
-        // Update profile state locally
-        setProfile(prev => ({ ...prev, image_url: imageUrl }));
-  
-        // Also update database
-        const { error: updateError } = await supabase
+        setProfile(prev => ({ ...prev, image_url: `${imageUrl}?t=${Date.now()}` }));
+        // Update DB
+        await supabase
           .from('profiles')
           .update({ image_url: imageUrl })
           .eq('id', user.id);
-  
-        if (updateError) {
-          console.log('Error updating profile with image URL:', updateError.message);
-        } else {
-          console.log('Profile updated with new image URL');
-          await fetchProfile();
-        }
-      } else {
-        console.log('No public URL returned');
       }
     } catch (error) {
       console.log('Upload image error:', error.message);
@@ -370,6 +357,12 @@ export default function Profile() {
         return;
       }
 
+      // Remove cache parameter from image_url before saving to database
+      let imageUrlForDB = profile.image_url;
+      if (imageUrlForDB && imageUrlForDB.includes('?cache=')) {
+        imageUrlForDB = imageUrlForDB.split('?cache=')[0];
+      }
+
       const profileData = {
         id: user.id,
         name: profile.name,
@@ -377,7 +370,7 @@ export default function Profile() {
         skills: profile.skills,
         hourly_rate: profile.hourly_rate ? parseFloat(profile.hourly_rate) : null,
         is_freelancer: profile.is_freelancer,
-        image_url: profile.image_url,
+        image_url: imageUrlForDB,
         available_for_work: profile.is_freelancer && profile.available_for_work,
         years_experience: profile.years_experience ? parseInt(profile.years_experience) : 1,
         availability: profile.availability,
@@ -403,7 +396,7 @@ export default function Profile() {
           name: profile.name,
           bio: profile.bio,
           hourly_rate: parseFloat(profile.hourly_rate) || 0,
-          image_url: profile.image_url,
+          image_url: imageUrlForDB,
           available_for_work: true,
           rating: 4.5,
           years_experience: parseInt(profile.years_experience) || 1,
@@ -601,6 +594,11 @@ export default function Profile() {
 
   const imageSize = getImageSize();
 
+  // Debug log for image URL before rendering
+  if (profile.image_url && profile.image_url.startsWith('http')) {
+    console.log('Rendering profile image with URL:', profile.image_url);
+  }
+
   if (loading && !profile.name) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -620,61 +618,72 @@ export default function Profile() {
           style={styles.container}
           contentContainerStyle={isLandscape ? styles.landscapeContent : styles.portraitContent}
         >
-          <View style={[
-            styles.header, 
-            isLandscape && styles.landscapeHeader
-          ]}>
-            <TouchableOpacity 
-              onPress={handleImagePick}
-              disabled={uploading}
-              style={styles.imageContainer}
-            >
-              {uploading && (
-                <View style={styles.uploadingOverlay}>
-                  <ActivityIndicator size="small" color="#fff" />
-                </View>
-              )}
-              {profile.image_url && profile.image_url.startsWith('http') ? (
-                <Image
-                  source={{ uri: profile.image_url }}
-                  style={[
-                    styles.profileImage, 
+          <LinearGradient colors={["#e0e7ff", "#f8fafc"]} style={styles.headerGradient}>
+            <View style={[
+              styles.header, 
+              isLandscape && styles.landscapeHeader
+            ]}>
+              <TouchableOpacity 
+                onPress={handleImagePick}
+                disabled={uploading}
+                style={styles.imageContainer}
+                onPressIn={handleImagePressIn}
+                onPressOut={handleImagePressOut}
+                activeOpacity={0.8}
+              >
+                {uploading && (
+                  <View style={styles.uploadingOverlay}>
+                    <ActivityIndicator size="small" color="#fff" />
+                  </View>
+                )}
+                {profile.image_url && profile.image_url.startsWith('http') ? (
+                  <Animated.Image
+                    source={{ 
+                      uri: profile.image_url,
+                      cache: 'reload',
+                      headers: { Pragma: 'no-cache' }
+                    }}
+                    style={[
+                      styles.profileImage, 
+                      { width: imageSize, height: imageSize, borderRadius: imageSize/2 },
+                      animatedImageStyle
+                    ]}
+                    resizeMode="cover"
+                    onError={(error) => {
+                      console.log('Image loading error:', error.nativeEvent);
+                      setProfile(prev => ({ ...prev, image_url: '' }));
+                    }}
+                    key={profile.image_url}
+                  />
+                ) : (
+                  <View style={[
+                    styles.profileImagePlaceholder,
                     { width: imageSize, height: imageSize, borderRadius: imageSize/2 }
-                  ]}
-                  resizeMode="cover"
-                />
+                  ]}>
+                    <Text style={[styles.addPhotoText, isSmallDevice ? styles.smallText : null]}>Add Photo</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              {profile.name ? (
+                <Text style={styles.profileName}>{profile.name}</Text>
               ) : (
-                <View style={[
-                  styles.profileImagePlaceholder,
-                  { width: imageSize, height: imageSize, borderRadius: imageSize/2 }
-                ]}>
-                  <Text style={[styles.addPhotoText, isSmallDevice ? styles.smallText : null]}>Add Photo</Text>
+                <Text style={styles.profileNamePlaceholder}>Your Name</Text>
+              )}
+              {profile.is_freelancer && (
+                <View style={styles.freelancerBadge}>
+                  <Text style={styles.freelancerBadgeText}>Freelancer</Text>
                 </View>
               )}
-            </TouchableOpacity>
-            
-            {profile.name ? (
-              <Text style={styles.profileName}>{profile.name}</Text>
-            ) : (
-              <Text style={styles.profileNamePlaceholder}>Your Name</Text>
-            )}
-            
-            {profile.is_freelancer && (
-              <View style={styles.freelancerBadge}>
-                <Text style={styles.freelancerBadgeText}>Freelancer</Text>
-              </View>
-            )}
-
-{profile.rating && (
-  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
-    <Ionicons name="star" size={18} color="#FFD700" />
-    <Text style={{ fontSize: 16, color: '#555', marginLeft: 4 }}>
-      {profile.rating.toFixed(1)} / 5
-    </Text>
-  </View>
-)}
-
-          </View>
+              {profile.rating && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+                  <Ionicons name="star" size={18} color="#FFD700" />
+                  <Text style={{ fontSize: 16, color: '#555', marginLeft: 4 }}>
+                    {profile.rating.toFixed(1)} / 5
+                  </Text>
+                </View>
+              )}
+            </View>
+          </LinearGradient>
 
           <View style={[
             styles.form,
@@ -828,50 +837,58 @@ export default function Profile() {
                   profile.is_freelancer && styles.freelancerToggleTextActive,
                   isSmallDevice && styles.smallText
                 ]}>
-                  I want to work as a freelancer
+                 I want to be available for freelance work
                 </Text>
+                <View style={[
+                  styles.toggleSwitch,
+                  profile.is_freelancer && styles.toggleSwitchActive
+                ]}>
+                  <View style={[
+                    styles.toggleBall,
+                    profile.is_freelancer && styles.toggleBallActive
+                  ]} />
+                </View>
               </TouchableOpacity>
 
               {profile.is_freelancer && (
-                <View style={styles.infoBox}>
-                  <Text style={[styles.infoText, isSmallDevice && styles.smallText]}>
-                    By activating freelancer mode, your profile will be visible to potential clients on the swipe page.
+                <View style={styles.availabilityToggleContainer}>
+                  <Text style={[styles.availabilityToggleLabel, isSmallDevice && styles.smallText]}>
+                    Available for work now
                   </Text>
+                  <Switch
+                    value={profile.available_for_work}
+                    onValueChange={(value) => setProfile(prev => ({ ...prev, available_for_work: value }))}
+                    trackColor={{ false: '#d1d1d1', true: '#34C759' }}
+                    thumbColor="#FFFFFF"
+                  />
                 </View>
               )}
             </View>
 
             <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+              <TouchableOpacity 
+                style={[styles.button, styles.saveButton]}
                 onPress={handleSave}
                 disabled={loading}
               >
                 {loading ? (
-                  <View style={styles.loadingButton}>
-                    <ActivityIndicator size="small" color="#fff" />
-                    <Text style={[styles.saveButtonText, isSmallDevice && styles.smallSaveText, {marginLeft: 10}]}>
-                      Saving...
-                    </Text>
-                  </View>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={[styles.saveButtonText, isSmallDevice && styles.smallSaveText]}>
-                    Save Profile
-                  </Text>
+                  <Text style={styles.saveButtonText}>Save Profile</Text>
                 )}
               </TouchableOpacity>
               
-              <TouchableOpacity
-                style={styles.signOutButton}
+              <TouchableOpacity 
+                style={[styles.button, styles.signOutButton]}
                 onPress={handleSignOut}
               >
-                <Text style={[styles.signOutButtonText, isSmallDevice && styles.smallText]}>Sign Out</Text>
+                <Text style={styles.signOutButtonText}>Sign Out</Text>
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
+      
       {renderAvailabilityModal()}
       {renderCertificateModal()}
     </SafeAreaView>
@@ -881,64 +898,50 @@ export default function Profile() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F5F5F5',
   },
-  container: { 
+  container: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  portraitContent: {
+    paddingBottom: 30,
+  },
+  landscapeContent: {
+    paddingBottom: 30,
+    flexDirection: 'row',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
   },
-  lloadingText: {
-    marginTop: 12,
+  loadingText: {
+    marginTop: 10,
     fontSize: 16,
     color: '#555',
   },
-  portraitContent: {
-    paddingBottom: 40,
-  },
-  landscapeContent: {
-    flexDirection: 'row',
-    paddingBottom: 40,
+  headerGradient: {
+    width: '100%',
+    paddingBottom: 10,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#a5b4fc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
   },
   header: {
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e4e8',
-  },
-  landscapeHeader: {
-    flex: 0.3,
+    padding: 24,
+    backgroundColor: 'transparent',
     borderBottomWidth: 0,
-    borderRightWidth: 1,
-    borderRightColor: '#e1e4e8',
-    justifyContent: 'flex-start',
-    paddingTop: 40,
-    height: '100%',
   },
   imageContainer: {
     position: 'relative',
-    marginBottom: 10,
-  },
-  profileImage: {
-    borderWidth: 3,
-    borderColor: '#007AFF',
-  },
-  profileImagePlaceholder: {
-    backgroundColor: '#e1e4e8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#b0b0b0',
-    borderStyle: 'dashed',
-  },
-  addPhotoText: {
-    color: '#777',
-    fontSize: 16,
+    marginBottom: 15,
   },
   uploadingOverlay: {
     position: 'absolute',
@@ -946,108 +949,169 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
   },
-  profileName: {
-    fontSize: 22,
-    fontWeight: '600',
-    marginBottom: 5,
+  profileImage: {
+    backgroundColor: '#E1E1E1',
+    borderWidth: 3,
+    borderColor: '#6366f1',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  profileNamePlaceholder: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: '#999',
-    marginBottom: 5,
+  profileImagePlaceholder: {
+    backgroundColor: '#E1E1E1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#c7d2fe',
+    shadowColor: '#a5b4fc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  freelancerBadge: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    marginTop: 5,
-  },
-  freelancerBadgeText: {
-    color: '#fff',
+  addPhotoText: {
+    color: '#555',
     fontSize: 14,
     fontWeight: '500',
   },
+  profileName: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#3730a3',
+    marginTop: 8,
+    letterSpacing: 0.5,
+  },
+  profileNamePlaceholder: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#888',
+  },
+  freelancerBadge: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 18,
+    marginTop: 12,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  freelancerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
   form: {
-    flex: 1,
     padding: 20,
   },
   landscapeForm: {
-    flex: 0.7,
-    paddingTop: 40,
+    width: '70%',
   },
   formSection: {
-    marginBottom: 25,
+    marginBottom: 28,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-    color: '#333',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#3730a3',
+    marginBottom: 18,
+    letterSpacing: 0.5,
   },
   smallSectionTitle: {
     fontSize: 16,
   },
   label: {
     fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 6,
-    color: '#555',
+    color: '#666',
+    marginBottom: 5,
   },
   input: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: '#c7d2fe',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: 16,
     marginBottom: 15,
+    backgroundColor: '#F4F6FB',
+    shadowColor: '#a5b4fc',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  inputFocused: {
+    borderColor: '#6366f1',
+    backgroundColor: '#fff',
   },
   smallInput: {
     fontSize: 14,
-    padding: 10,
+    paddingVertical: 8,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
   },
+  smallText: {
+    fontSize: 12,
+  },
   skillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 12,
-    minHeight: 30,
+    marginBottom: 10,
   },
   skill: {
+    backgroundColor: '#e0e7ff',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    margin: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e1f5fe',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    marginBottom: 8,
+    shadowColor: '#a5b4fc',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 6,
+    elevation: 2,
   },
   smallSkill: {
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   skillText: {
-    color: '#0277bd',
-    fontSize: 14,
+    color: '#0277BD',
     fontWeight: '500',
   },
   removeSkillIcon: {
-    marginLeft: 6,
-    fontSize: 18,
-    color: '#0277bd',
+    color: '#0277BD',
     fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 5,
   },
   addSkill: {
     flexDirection: 'row',
@@ -1056,70 +1120,67 @@ const styles = StyleSheet.create({
   addButton: {
     backgroundColor: '#007AFF',
     borderRadius: 8,
-    padding: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
     marginLeft: 10,
   },
   addButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  noItemsText: {
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  editButton: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  editButtonText: {
-    color: '#555',
-    fontSize: 14,
+    color: '#FFFFFF',
     fontWeight: '500',
   },
   infoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F8F8F8',
     borderRadius: 8,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    marginBottom: 8,
   },
   infoLabel: {
     color: '#666',
-    fontWeight: '500',
+    fontSize: 14,
   },
   infoValue: {
     color: '#333',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  editButton: {
+    backgroundColor: '#F0F0F0',
+    borderRadius: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  editButtonText: {
+    color: '#555',
+    fontSize: 14,
+  },
+  noItemsText: {
+    color: '#888',
+    fontStyle: 'italic',
+    marginBottom: 10,
   },
   certificateCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#a5b4fc',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 6,
+    elevation: 2,
   },
   certificateHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center', 
-    marginBottom: 4,
+    marginBottom: 5,
   },
   certificateName: {
-    fontWeight: '600',
-    fontSize: 15,
+    fontSize: 16,
+    fontWeight: '500',
     color: '#333',
   },
   certificateDetails: {
@@ -1127,73 +1188,87 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   removeText: {
-    color: '#ff3b30',
+    color: '#FF3B30',
     fontSize: 14,
   },
   freelancerToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 25,
     padding: 15,
+    marginTop: 10,
     marginBottom: 15,
   },
   freelancerToggleActive: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: '#E1F5FE',
   },
   freelancerToggleText: {
-    fontWeight: '600',
-    color: '#777',
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
   },
   freelancerToggleTextActive: {
-    color: '#007AFF',
+    color: '#0277BD',
   },
-  infoBox: {
-    backgroundColor: '#fff9c4',
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ffd54f',
+  toggleSwitch: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#DDDDDD',
+    padding: 2,
   },
-  infoText: {
-    color: '#8a6d3b',
+  toggleSwitchActive: {
+    backgroundColor: '#007AFF',
+  },
+  toggleBall: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  toggleBallActive: {
+    transform: [{ translateX: 22 }],
+  },
+  availabilityToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  availabilityToggleLabel: {
+    fontSize: 16,
+    color: '#333',
   },
   buttonContainer: {
     marginTop: 10,
   },
-  saveButton: {
-    backgroundColor: '#007AFF',
+  button: {
     borderRadius: 8,
-    padding: 15,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 10,
   },
-  loadingButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#b0c4de',
+  saveButton: {
+    backgroundColor: '#6366f1',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 4,
   },
   saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  smallSaveText: {
-    fontSize: 14,
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   signOutButton: {
-    borderWidth: 1,
-    borderColor: '#dc3545',
-    borderRadius: 8,
-    padding: 15,
-    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
   },
   signOutButtonText: {
-    color: '#dc3545',
+    color: '#FF3B30',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1202,22 +1277,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
     padding: 20,
-    width: '90%',
+    width: '80%',
     maxWidth: 400,
   },
   modalContentSmall: {
+    width: '90%',
     padding: 15,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
     textAlign: 'center',
   },
   modalButtons: {
@@ -1226,20 +1301,17 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   modalButton: {
-    flex: 1,
-    padding: 12,
     borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    minWidth: 100,
     alignItems: 'center',
-    marginHorizontal: 5,
   },
   cancelButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#F0F0F0',
   },
   cancelButtonText: {
-    color: '#666',
-    fontWeight: '600',
-  },
-  smallText: {
-    fontSize: 12,
+    color: '#555',
+    fontWeight: '500',
   },
 });

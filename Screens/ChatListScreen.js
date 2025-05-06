@@ -23,6 +23,7 @@ const ChatListScreen = ({ navigation }) => {
     return (
       <TouchableOpacity
         style={styles.chatItem}
+        activeOpacity={0.85}
         onPress={() => navigation.navigate('Chat', { freelancer: item })}
         key={`chat-${item.id}`}
       >
@@ -78,63 +79,88 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
-    padding: 15,
+    padding: 20,
+    backgroundColor: '#f8f8fa',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#000',
+    letterSpacing: 1,
   },
   listContent: {
-    padding: 10,
+    padding: 16,
   },
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    padding: 16,
+    marginBottom: 14,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   profileImage: {
     width: 50,
     height: 50,
     borderRadius: 25,
     marginRight: 15,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#f2f2f2',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
   },
   chatInfo: {
     flex: 1,
   },
   name: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: '700',
+    color: '#222',
     marginBottom: 4,
+    letterSpacing: 0.2,
   },
   lastMessage: {
     fontSize: 14,
     color: '#666',
+    marginTop: 2,
   },
   time: {
     fontSize: 12,
-    color: '#999',
+    color: '#bbb',
+    marginLeft: 8,
+    alignSelf: 'flex-start',
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#f8f8fa',
   },
   emptyStateText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#666',
+    color: '#888',
     marginTop: 16,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#999',
+    color: '#aaa',
     textAlign: 'center',
     marginTop: 8,
   },
