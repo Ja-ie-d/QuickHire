@@ -56,16 +56,20 @@ function MainTabNavigator() {
             iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
+          } else if (route.name === 'Ratings') {
+            iconName = focused ? 'star' : 'star-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: 'gray',
+        headerShown: false,
       })}
     >
       <Tab.Screen name="Swipe" component={SwipeScreen} />
       <Tab.Screen name="Chats" component={ChatStack} />
+      <Tab.Screen name="Ratings" component={RatingScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

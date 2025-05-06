@@ -84,6 +84,9 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: 'bold',
     color: '#2196F3',
+    textShadowColor: '#90caf9',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   noMoreProfiles: {
     flex: 1,

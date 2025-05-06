@@ -13,11 +13,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useMatch } from '../context/MatchContext';
 import { useRating } from '../context/RatingContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 const RatingScreen = () => {
     const { matches } = useMatch();
     const { ratings, rateFreelancer } = useRating();
   const [expandedProfileId, setExpandedProfileId] = useState(null);
+  const scale = useSharedValue(1);
+  const animatedStarStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   // If no matches, show empty state
   if (!matches || matches.length === 0) {
@@ -52,13 +58,18 @@ const RatingScreen = () => {
               rateFreelancer(freelancerId, star);
               Alert.alert('Rating Saved', `You rated this freelancer ${star} stars.`);
             }}
+            onPressIn={() => { scale.value = withSpring(1.2); }}
+            onPressOut={() => { scale.value = withSpring(1); }}
+            activeOpacity={0.7}
           >
-            <Ionicons
-              name={star <= currentRating ? 'star' : 'star-outline'}
-              size={28}
-              color={star <= currentRating ? '#FFD700' : '#BBBBBB'}
-              style={styles.star}
-            />
+            <Animated.View style={animatedStarStyle}>
+              <Ionicons
+                name={star <= currentRating ? 'star' : 'star-outline'}
+                size={34}
+                color={star <= currentRating ? '#FFD700' : '#BBBBBB'}
+                style={styles.star}
+              />
+            </Animated.View>
           </TouchableOpacity>
         ))}
       </View>
@@ -115,9 +126,11 @@ const RatingScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Ratings</Text>
-      </View>
+      <LinearGradient colors={["#e0e7ff", "#f8fafc"]} style={styles.headerGradient}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>My Ratings</Text>
+        </View>
+      </LinearGradient>
       
       <FlatList
         data={matches}
@@ -134,76 +147,99 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
+  headerGradient: {
+    width: '100%',
+    paddingBottom: 10,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#a5b4fc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+  },
   header: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-    backgroundColor: '#FFFFFF',
+    padding: 24,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 0,
+    alignItems: 'flex-start',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#333333',
+    color: '#2196F3',
+    letterSpacing: 0.5,
   },
   listContainer: {
     padding: 10,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    marginBottom: 15,
-    shadowColor: '#000',
+    borderRadius: 18,
+    marginBottom: 18,
+    shadowColor: '#2196F3',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    elevation: 3,
     overflow: 'hidden',
   },
   profileHeader: {
     flexDirection: 'row',
-    padding: 15,
+    padding: 18,
     alignItems: 'center',
   },
   profileImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 15,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    marginRight: 18,
+    borderWidth: 3,
+    borderColor: '#2196F3',
+    shadowColor: '#2196F3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 2,
   },
   profileInfo: {
     flex: 1,
   },
   profileName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333333',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2196F3',
   },
   profileTitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#666666',
     marginTop: 3,
   },
   profileRating: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#2196F3',
     marginTop: 3,
+    fontWeight: '600',
   },
   expandedContent: {
-    padding: 15,
+    padding: 18,
     borderTopWidth: 1,
     borderTopColor: '#EEEEEE',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333333',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#2196F3',
     marginTop: 10,
-    marginBottom: 5,
+    marginBottom: 7,
+    letterSpacing: 0.2,
   },
   profileBio: {
     fontSize: 14,
     color: '#666666',
     lineHeight: 20,
+    marginBottom: 8,
   },
   skillsContainer: {
     flexDirection: 'row',
@@ -211,24 +247,30 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   skillBadge: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     marginRight: 8,
     marginBottom: 8,
+    shadowColor: '#a5b4fc',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 6,
+    elevation: 2,
   },
   skillText: {
     color: '#2196F3',
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '500',
   },
   ratingContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginVertical: 10,
+    marginVertical: 12,
   },
   star: {
-    marginHorizontal: 5,
+    marginHorizontal: 7,
   },
   emptyContainer: {
     flex: 1,
@@ -237,16 +279,16 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666666',
-    marginTop: 20,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#888',
+    marginTop: 22,
   },
   emptySubText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#999999',
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 12,
   },
 });
 

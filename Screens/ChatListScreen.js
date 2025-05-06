@@ -11,6 +11,7 @@ import {
 import { useMatch } from '../context/MatchContext';
 import { useChat } from '../context/ChatContext';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const ChatListScreen = ({ navigation }) => {
   const { matches } = useMatch();
@@ -50,9 +51,11 @@ const ChatListScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Chats</Text>
-      </View>
+      <LinearGradient colors={["#e0e7ff", "#f8fafc"]} style={styles.headerGradient}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Chats</Text>
+        </View>
+      </LinearGradient>
       {matches.length > 0 ? (
         <FlatList
           data={matches}
@@ -62,7 +65,7 @@ const ChatListScreen = ({ navigation }) => {
         />
       ) : (
         <View style={styles.emptyState}>
-          <Ionicons name="chatbubbles-outline" size={64} color="#ccc" />
+          <Ionicons name="chatbubbles-outline" size={64} color="#b4b8f8" />
           <Text style={styles.emptyStateText}>No chats yet</Text>
           <Text style={styles.emptyStateSubtext}>
             Swipe right on freelancers to start chatting
@@ -78,22 +81,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  header: {
-    padding: 20,
-    backgroundColor: '#f8f8fa',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+  headerGradient: {
+    width: '100%',
+    paddingBottom: 10,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    marginBottom: 10,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowColor: '#a5b4fc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+  },
+  header: {
+    padding: 24,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 0,
+    alignItems: 'flex-start',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#000',
-    letterSpacing: 1,
+    color: '#2196F3',
+    letterSpacing: 0.5,
   },
   listContent: {
     padding: 16,
@@ -101,46 +111,47 @@ const styles = StyleSheet.create({
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    marginBottom: 14,
+    padding: 18,
+    marginBottom: 16,
     backgroundColor: '#fff',
-    borderRadius: 16,
-    shadowColor: '#000',
+    borderRadius: 18,
+    shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    elevation: 3,
   },
   profileImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 15,
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 18,
+    borderWidth: 3,
+    borderColor: '#2196F3',
     backgroundColor: '#f2f2f2',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 2,
   },
   chatInfo: {
     flex: 1,
   },
   name: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#222',
+    color: '#2196F3',
     marginBottom: 4,
     letterSpacing: 0.2,
   },
   lastMessage: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#666',
     marginTop: 2,
   },
   time: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#bbb',
     marginLeft: 8,
     alignSelf: 'flex-start',
@@ -153,16 +164,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f8fa',
   },
   emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#888',
-    marginTop: 16,
+    marginTop: 22,
   },
   emptyStateSubtext: {
-    fontSize: 14,
-    color: '#aaa',
+    fontSize: 15,
+    color: '#999',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 12,
   },
 });
 

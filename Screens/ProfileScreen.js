@@ -814,7 +814,7 @@ export default function Profile() {
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.sectionTitle}>Freelancer Settings</Text>
+              <Text style={styles.sectionTitle}>Blue-Collar Settings</Text>
               
               <Text style={styles.label}>Hourly Rate ($)</Text>
               <TextInput
@@ -837,7 +837,7 @@ export default function Profile() {
                   profile.is_freelancer && styles.freelancerToggleTextActive,
                   isSmallDevice && styles.smallText
                 ]}>
-                 I want to be available for freelance work
+                 I want to be available for Blue-Collar work
                 </Text>
                 <View style={[
                   styles.toggleSwitch,
@@ -928,7 +928,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 24,
     marginBottom: 10,
     elevation: 2,
-    shadowColor: '#a5b4fc',
+    shadowColor: '#2196F3',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 12,
@@ -958,8 +958,8 @@ const styles = StyleSheet.create({
   profileImage: {
     backgroundColor: '#E1E1E1',
     borderWidth: 3,
-    borderColor: '#6366f1',
-    shadowColor: '#6366f1',
+    borderColor: '#2196F3',
+    shadowColor: '#2196F3',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.18,
     shadowRadius: 16,
@@ -985,7 +985,7 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#3730a3',
+    color: '#2196F3',
     marginTop: 8,
     letterSpacing: 0.5,
   },
@@ -995,12 +995,12 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   freelancerBadge: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#2196F3',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 18,
     marginTop: 12,
-    shadowColor: '#6366f1',
+    shadowColor: '#2196F3',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#3730a3',
+    color: '#2196F3',
     marginBottom: 18,
     letterSpacing: 0.5,
   },
@@ -1066,7 +1066,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   inputFocused: {
-    borderColor: '#6366f1',
+    borderColor: '#2196F3',
     backgroundColor: '#fff',
   },
   smallInput: {
@@ -1086,7 +1086,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   skill: {
-    backgroundColor: '#e0e7ff',
+    backgroundColor: '#e3f2fd',
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -1104,7 +1104,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   skillText: {
-    color: '#0277BD',
+    color: '#2196F3',
     fontWeight: '500',
   },
   removeSkillIcon: {
@@ -1251,8 +1251,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   saveButton: {
-    backgroundColor: '#6366f1',
-    shadowColor: '#6366f1',
+    backgroundColor: '#2196F3',
+    shadowColor: '#2196F3',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 12,

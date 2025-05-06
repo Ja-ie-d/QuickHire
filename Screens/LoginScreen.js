@@ -113,7 +113,7 @@ export default function LoginScreen({ navigation }) {
                   />
                 </View>
                 <Text style={styles.appName}>QuickHire</Text>
-                <Text style={styles.tagline}>Find the perfect freelancer for your projects</Text>
+                <Text style={styles.tagline}>Find the perfect Blue-Collar worker to help you</Text>
               </View>
               <View style={[
                 styles.formCard,
