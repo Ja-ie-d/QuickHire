@@ -31,15 +31,15 @@ import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useMatch } from '../context/MatchContext';
 
-// Get device dimensions for responsive layout
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// Define swipe threshold constant
+
 const SWIPE_THRESHOLD = 120;
 
 const Match = ({ onMatchCreated }) => {
   const navigation = useNavigation();
-  // Use the context
+  
   const { matches, addMatch } = useMatch();
   
   const [freelancers, setFreelancers] = useState([]);
@@ -60,18 +60,18 @@ const Match = ({ onMatchCreated }) => {
   const entranceOpacity = useSharedValue(0);
   const entranceTranslateY = useSharedValue(40);
 
-  // Animate card entrance
+ 
   useEffect(() => {
     entranceOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.exp) });
     entranceTranslateY.value = withTiming(0, { duration: 400, easing: Easing.out(Easing.exp) });
   }, [currentIndex]);
 
-  // Check authentication status when component mounts
+ 
   useEffect(() => {
     checkAuthStatus();
   }, []);
 
-  // Reset values when currentIndex changes
+  
   useEffect(() => {
     x.value = 0;
     y.value = 0;
@@ -82,24 +82,18 @@ const Match = ({ onMatchCreated }) => {
     setImageError(false);
   }, [currentIndex]);
 
-  // Check if user is authenticated
+  
   const checkAuthStatus = async () => {
     setIsLoading(true);
-    
-    // Get the current session
     const { data: { session }, error } = await supabase.auth.getSession();
-    
     if (error) {
       console.log('Error getting session:', error.message);
     }
-    
-    // If no session exists or session is expired, redirect to login
-    if (!session) {
+    if (!session || !session.user) {
+      console.log('No authenticated user found');
       navigation.replace('Login');
       return;
     }
-    
-    // If authenticated, fetch freelancers
     fetchFreelancers();
   };
 
@@ -112,14 +106,14 @@ const Match = ({ onMatchCreated }) => {
       
       if (error) {
         console.log('Error fetching freelancers:', error.message);
-        // If there's an error, use sample data
+        
         setFreelancers(sampleFreelancers);
       } else if (data && data.length > 0) {
-        // Randomly shuffle the data to provide a fresh experience on reload
+        
         const shuffledData = [...data].sort(() => Math.random() - 0.5);
         setFreelancers(shuffledData);
       } else {
-        // Fallback to sample data if no freelancers in database
+        
         setFreelancers(sampleFreelancers);
       }
     } catch (error) {
@@ -134,56 +128,16 @@ const Match = ({ onMatchCreated }) => {
   const handleReloadFreelancers = () => {
     setIsReloading(true);
     setCurrentIndex(0);
-    // Small delay to allow for animation
+    
     setTimeout(() => {
       fetchFreelancers();
     }, 300);
   };
 
-  // Sample data as fallback
-  const sampleFreelancers = [
-    { 
-      id: 1, 
-      name: 'John Doe', 
-      rating: 4.5, 
-      hourly_rate: 50, 
-      years_experience: 5, 
-      image_url: 'https://randomuser.me/api/portraits/men/32.jpg', 
-      total_reviews: 20, 
-      availability: { hours_per_week: 40, timezone: 'GMT', preferred_hours: '9 AM - 5 PM' }, 
-      skills: [{ id: '1-1', name: 'JavaScript', years: 3, level: 'Expert' }, { id: '1-2', name: 'React', years: 2, level: 'Intermediate' }], 
-      certificates: [{ id: '1-1', name: 'React Certification', year: 2020, issuer: 'Coursera' }] 
-    },
-    { 
-      id: 2, 
-      name: 'Jane Smith', 
-      rating: 4.8, 
-      hourly_rate: 65, 
-      years_experience: 7, 
-      image_url: 'https://randomuser.me/api/portraits/women/44.jpg', 
-      total_reviews: 32, 
-      availability: { hours_per_week: 30, timezone: 'EST', preferred_hours: '10 AM - 6 PM' }, 
-      skills: [{ id: '2-1', name: 'UI/UX Design', years: 5, level: 'Expert' }, { id: '2-2', name: 'Figma', years: 4, level: 'Expert' }], 
-      certificates: [{ id: '2-1', name: 'UI/UX Professional', year: 2019, issuer: 'Udemy' }] 
-    },
-    { 
-      id: 3, 
-      name: 'Alex Johnson', 
-      rating: 4.2, 
-      hourly_rate: 45, 
-      years_experience: 3, 
-      image_url: 'https://randomuser.me/api/portraits/men/67.jpg', 
-      total_reviews: 15, 
-      availability: { hours_per_week: 20, timezone: 'PST', preferred_hours: '1 PM - 9 PM' }, 
-      skills: [{ id: '3-1', name: 'Python', years: 3, level: 'Intermediate' }, { id: '3-2', name: 'Data Analysis', years: 2, level: 'Intermediate' }], 
-      certificates: [{ id: '3-1', name: 'Python Developer', year: 2021, issuer: 'DataCamp' }] 
-    }
-  ];
-
   const handleSwipe = (swipeDirection) => {
     setDirection(swipeDirection);
     
-    // Animate card off screen
+    
     const moveX = swipeDirection === 'right' ? SCREEN_WIDTH + 100 : -SCREEN_WIDTH - 100;
     x.value = withTiming(moveX, { duration: 300 }, () => {
       cardOpacity.value = withTiming(0, { duration: 200 }, () => {
@@ -199,20 +153,20 @@ const Match = ({ onMatchCreated }) => {
       const alreadyMatched = matches.some(f => f.id === currentFreelancer.id);
       
       if (!alreadyMatched) {
-        // Use the context function to add a match
+       
         addMatch(currentFreelancer);
         
         setSelectedFreelancer(currentFreelancer);
         setShowModal(true);
   
-        // Update parent if needed
+        
         if (onMatchCreated && typeof onMatchCreated === 'function') {
           onMatchCreated(currentFreelancer);
         }
       }
     }
   
-    // Move to the next profile
+    
     setTimeout(() => {
       setCurrentIndex(prev => prev + 1);
       x.value = 0;
@@ -228,10 +182,10 @@ const Match = ({ onMatchCreated }) => {
   };
 
   const navigateToChat = () => {
-    // Close the modal first
+    
     setShowModal(false);
     
-    // Navigate to chat screen with the selected freelancer
+    
     navigation.navigate('Chat', { 
       freelancer: selectedFreelancer 
     });
@@ -243,7 +197,7 @@ const Match = ({ onMatchCreated }) => {
       y.value = event.translationY;
       rotate.value = event.translationX / 15;
       
-      // Update direction based on swipe
+     
       if (event.translationX > 50) {
         runOnJS(setDirection)('right');
       } else if (event.translationX < -50) {
@@ -266,14 +220,14 @@ const Match = ({ onMatchCreated }) => {
 
   const cardStyle = useAnimatedStyle(() => {
     const rotateValue = `${rotate.value}deg`;
-    // Animate scale and shadow as card is dragged
+    
     const dragDistance = Math.abs(x.value);
     const scaleValue = interpolate(dragDistance, [0, SWIPE_THRESHOLD], [1, 0.96], Extrapolation.CLAMP);
     const shadowOpacity = interpolate(dragDistance, [0, SWIPE_THRESHOLD], [0.12, 0.25], Extrapolation.CLAMP);
-    // Animate colored shadow/glow based on swipe direction
+    
     let shadowColor = '#4C63B6';
-    if (x.value > 0) shadowColor = '#4CD964'; // right swipe = green glow
-    if (x.value < 0) shadowColor = '#FF6B6B'; // left swipe = red glow
+    if (x.value > 0) shadowColor = '#4CD964'; 
+    if (x.value < 0) shadowColor = '#FF6B6B'; 
     return {
       transform: [
         { translateX: x.value },
@@ -287,7 +241,7 @@ const Match = ({ onMatchCreated }) => {
     };
   });
 
-  // Animated swipe instruction
+  
   const instructionOpacity = useSharedValue(0);
   useEffect(() => {
     instructionOpacity.value = withTiming(1, { duration: 600 });
@@ -301,13 +255,19 @@ const Match = ({ onMatchCreated }) => {
   const uploadImage = async (uri) => {
     setUploading(true);
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
+      const { data: { session }, error: userError } = await supabase.auth.getSession();
+      if (userError || !session || !session.user) {
+        console.log('No authenticated user found');
+        Alert.alert('Not Authenticated', 'Please log in to upload images.');
+        setUploading(false);
+        return;
+      }
+      const user = session.user;
 
-      // Fetch the file as a blob and set the type explicitly
+      
       const response = await fetch(uri);
       const arrayBuffer = await response.arrayBuffer();
-      const blob = new Blob([arrayBuffer], { type: 'image/jpeg' }); // or 'image/png' if PNG
+      const blob = new Blob([arrayBuffer], { type: 'image/jpeg' }); 
 
       const filePath = `${user.id}/profile.jpg`;
 
@@ -316,7 +276,7 @@ const Match = ({ onMatchCreated }) => {
         .upload(filePath, blob, {
           cacheControl: '3600',
           upsert: true,
-          contentType: 'image/jpeg', // Make sure this matches the Blob type
+          contentType: 'image/jpeg', 
         });
 
       if (uploadError) {
@@ -351,7 +311,7 @@ const Match = ({ onMatchCreated }) => {
     }
   };
 
-  // Render appropriate content based on loading state and available freelancers
+  
   const renderContent = () => {
     if (isLoading) {
       return (
@@ -505,8 +465,7 @@ const Match = ({ onMatchCreated }) => {
     );
   };
   
-  // Action buttons are now commented out / removed
-  // The renderActionButtons function is kept but not used
+ 
   const renderActionButtons = () => {
     if (isLoading || freelancers.length === 0 || currentIndex >= freelancers.length) {
       return null;
@@ -531,7 +490,7 @@ const Match = ({ onMatchCreated }) => {
     );
   };
   
-  // Modal to show when a match is made
+ 
   const renderMatchModal = () => {
     if (!selectedFreelancer) return null;
     
@@ -597,7 +556,7 @@ const Match = ({ onMatchCreated }) => {
   );
 };
 
-// Enhanced styles for better UI
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -701,7 +660,7 @@ const styles = StyleSheet.create({
   },
   infoContainer: {
     flex: 1,
-    padding: 15, // Reduced padding from 20 to 15
+    padding: 15, 
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -747,7 +706,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#E0E0E0',
-    marginVertical: 10, // Reduced from 15 to 10
+    marginVertical: 10, 
   },
   detailsScroll: {
     flex: 1,
